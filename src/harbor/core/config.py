@@ -14,7 +14,7 @@ class HarborConfig:
 
     @property
     def version(self) -> str:
-        return self.settings.get("app", {}).get("version", "0.2.0")
+        return self.settings.get("app", {}).get("version", "0.3.0")
 
     @property
     def debug(self) -> bool:
@@ -47,6 +47,43 @@ class HarborConfig:
     @property
     def local_queue_failed_path(self) -> str:
         return self.settings.get("local_queue", {}).get("failed_path", "data/failed")
+
+
+    @property
+    def wechat_enabled(self) -> bool:
+        return bool(self.settings.get("wechat", {}).get("enabled", False))
+
+    @property
+    def wechat_target_contact_name(self) -> str:
+        return self.settings.get("wechat", {}).get("target_contact_name", "")
+
+    @property
+    def wechat_allowed_senders(self) -> list[str]:
+        return list(self.settings.get("wechat", {}).get("allowed_senders", []))
+
+    @property
+    def wechat_poll_interval_seconds(self) -> int:
+        return int(self.settings.get("wechat", {}).get("poll_interval_seconds", 2))
+
+    @property
+    def wechat_reply_check_interval_seconds(self) -> int:
+        return int(self.settings.get("wechat", {}).get("reply_check_interval_seconds", 2))
+
+    @property
+    def wechat_auto_reply(self) -> bool:
+        return bool(self.settings.get("wechat", {}).get("auto_reply", True))
+
+    @property
+    def wechat_sent_path(self) -> str:
+        return self.settings.get("wechat", {}).get("sent_path", "data/wechat/sent")
+
+    @property
+    def wechat_failed_path(self) -> str:
+        return self.settings.get("wechat", {}).get("failed_path", "data/wechat/failed")
+
+    @property
+    def wechat_logs_path(self) -> str:
+        return self.settings.get("wechat", {}).get("logs_path", "data/wechat/logs")
 
     @property
     def enabled_workers(self) -> list[str]:

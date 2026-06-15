@@ -1,14 +1,15 @@
 {
   "app": {
     "name": "Harbor",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "debug": true
   },
   "bridge": {
     "default": "local_queue",
     "enabled": [
       "mock",
-      "local_queue"
+      "local_queue",
+      "wechat_queue_adapter"
     ]
   },
   "local_queue": {
@@ -37,5 +38,18 @@
   "logs": {
     "path": "data/logs/harbor.log",
     "error_path": "data/logs/errors.log"
+  },
+  "wechat": {
+    "enabled": false,
+    "target_contact_name": "",
+    "allowed_senders": [
+      "JC"
+    ],
+    "poll_interval_seconds": 2,
+    "reply_check_interval_seconds": 2,
+    "auto_reply": true,
+    "sent_path": "data/wechat/sent",
+    "failed_path": "data/wechat/failed",
+    "logs_path": "data/wechat/logs"
   }
 }

@@ -1,29 +1,83 @@
 # Harbor Architecture
 
-## v0.2 标准架构
+## v0.3 标准架构
 
-Harbor v0.2 当前默认主流程：
+Harbor v0.3 当前推荐运行方式是两个独立进程：
 
 ```text
-Local Queue Bridge
--> 读取 data/inbox/*.json
+窗口 1：python -m harbor.main
+窗口 2：python -m harbor.bridges.wechat_bridge
+```
+
+整体链路：
+
+```text
+微信消息
+-> WeChat Queue Adapter
+-> data/inbox/*.json
+-> Local Queue Bridge
 -> Permission
 -> Task
 -> Router
 -> Worker
 -> WorkerResult
 -> Logger
--> 写入 data/outbox/*.json
--> 成功移动原文件到 data/processed/
--> 失败移动原文件到 data/failed/
+-> data/outbox/*.json
+-> WeChat Queue Adapter
+-> 回复微信
+-> data/wechat/sent/ 或 data/wechat/failed/
 ```
 
-v0.2 仍保留 v0.1 的 Mock Bridge，用于本地命令行验证。
+## v0.3 关键边界
+
+WeChat Queue Adapter 是外部适配层，不是 Harbor Core。
+
+它只负责：
+
+- 监听指定微信联系人消息
+- 只处理白名单联系人
+- 把微信消息转换为 JSON 文件写入 `data/inbox/`
+- 从 `data/outbox/` 读取属于微信用户的结果文件
+- 把结果中的 `content` 发送回对应微信联系人
+- 发送成功后移动结果文件到 `data/wechat/sent/`
+- 发送失败后移动结果文件到 `data/wechat/failed/`
+- 写入微信桥接日志
+
+它不负责：
+
+- 命令解析
+- 权限判断
+- Worker 选择
+- GPT 调用
+- DeepSeek 调用
+- LobeChat 调用
+- 数据库存储
+- 网页后台
+- 群聊
+- 群发
+- 高频自动回复
+
+## Core 主流程
+
+Harbor Core 主流程仍然保持 v0.2 稳定结构：
+
+```text
+Mock / Local Queue Bridge
+-> Permission
+-> Task
+-> Router
+-> Worker
+-> WorkerResult
+-> Logger
+-> Bridge 输出
+```
 
 `main.py` 会根据 `config/settings.json` 中的 `bridge.default` 选择入口：
 
 - `local_queue`：处理当前 `data/inbox/` 中的 JSON 文件后退出
 - `mock`：进入本地命令行 Mock Bridge 流程
+
+v0.3 不把 WeChat Queue Adapter 强行绑进 `main.py`。
 
 ## 核心概念
 
@@ -59,25 +113,29 @@ WorkerResult 当前包含：
 
 Bridge 是外部入口和出口。
 
-v0.2 当前包含：
+v0.3 当前包含：
 
 - `MockBridge`：本地命令行输入输出，用于开发验证
 - `LocalQueueBridge`：本地 JSON 文件消息队列，用于模拟外部消息系统
-- `WechatBridge`：占位模块，当前不接真实微信
+- `WeChatQueueAdapter`：微信和本地队列之间的独立适配层
 
 Local Queue Bridge 只负责文件读写和消息转交，不负责命令解析、权限判断、Worker 选择或业务执行。
+
+WeChat Queue Adapter 只负责微信收发和本地队列文件转换，不直接操作 Harbor Core。
 
 ### Permission
 
 Permission 负责权限检查。
 
-v0.2 当前只做白名单检查。
+v0.3 当前只做白名单检查。
 
 白名单来自：
 
 ```text
 config/settings.json
 ```
+
+注意：WeChat Queue Adapter 也有自己的 `wechat.allowed_senders`，用于在进入 `data/inbox/` 之前先过滤微信联系人。
 
 ### Router
 
@@ -95,7 +153,7 @@ Router 负责根据 Task.command 选择 Worker。
 
 Worker 是实际执行能力。
 
-v0.2 当前包含：
+v0.3 当前包含：
 
 - mock_worker：验证本地任务链路
 - system_worker：处理 `/help`、`/status` 和未知命令
@@ -105,31 +163,31 @@ v0.2 当前包含：
 
 Logger 负责记录 Harbor 运行日志。
 
-日志路径来自：
-
-```text
-config/settings.json
-```
-
-默认路径：
+Core 日志默认路径：
 
 ```text
 data/logs/harbor.log
 data/logs/errors.log
 ```
 
-## v0.2 不做的事情
+WeChat Queue Adapter 日志默认路径：
 
-Harbor v0.2 不接入：
+```text
+data/wechat/logs/wechat_bridge.log
+```
 
-- 真实微信
+## v0.3 不做的事情
+
+Harbor v0.3 不接入：
+
 - 真实 ChatGPT 桌面端
 - LobeChat
 - DeepSeek API
 - 数据库
 - 网页后台
-- 复杂并发
-- 常驻监听
+- 自然语言智能路由
+- 群聊
+- 高频自动回复
 
 ## 当前目录职责
 

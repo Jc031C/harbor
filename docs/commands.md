@@ -1,8 +1,10 @@
 # Harbor Commands
 
-Harbor v0.2 当前支持以下命令。
+Harbor v0.3 当前支持以下命令。
 
-命令可以通过 Mock Bridge 输入，也可以写入 Local Queue Bridge 的 JSON 文件中。
+命令可以通过 Mock Bridge 输入，也可以写入 Local Queue Bridge 的 JSON 文件中，也可以由 WeChat Queue Adapter 从微信消息转换后写入 `data/inbox/`。
+
+注意：WeChat Queue Adapter 不解析命令，它只转交原始文本。
 
 ## /mock
 
@@ -46,7 +48,7 @@ Mock Worker 返回收到的内容。
 
 注意：
 
-v0.2 不接入真实 ChatGPT 桌面端，只返回占位回复。
+v0.3 不接入真实 ChatGPT 桌面端，只返回占位回复。
 
 ## /help
 
@@ -130,3 +132,37 @@ data/processed/test_mock.json
 ```text
 data/failed/test_mock.json
 ```
+
+## WeChat Queue Adapter 输入示例
+
+微信白名单联系人发送：
+
+```text
+/mock hello harbor
+```
+
+WeChat Queue Adapter 写入：
+
+```text
+data/inbox/wechat_*.json
+```
+
+文件内容类似：
+
+```json
+{
+  "source": "wechat",
+  "sender_id": "wechat_JC",
+  "sender_name": "JC",
+  "message": "/mock hello harbor",
+  "created_at": "2026-06-15 10:00:00"
+}
+```
+
+随后运行 Harbor Core：
+
+```bash
+python -m harbor.main
+```
+
+结果会写入 `data/outbox/`，WeChat Queue Adapter 读取后回复微信联系人。

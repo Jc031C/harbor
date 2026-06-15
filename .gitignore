@@ -22,6 +22,12 @@ data/failed/*
 !data/outbox/.gitkeep
 !data/processed/.gitkeep
 !data/failed/.gitkeep
+data/wechat/sent/*
+data/wechat/failed/*
+data/wechat/logs/*
+!data/wechat/sent/.gitkeep
+!data/wechat/failed/.gitkeep
+!data/wechat/logs/.gitkeep
 
 # OS / Editor
 .DS_Store

@@ -1,0 +1,33 @@
+{
+  "project_name": "Harbor",
+  "preserve_runtime_data": true,
+  "preserve_gitkeep_in_data": true,
+  "exclude_globs": [
+    ".git/**",
+    ".git",
+    ".venv/**",
+    "venv/**",
+    "env/**",
+    "__pycache__/**",
+    "**/__pycache__/**",
+    ".pytest_cache/**",
+    ".mypy_cache/**",
+    ".ruff_cache/**",
+    ".DS_Store",
+    "**/.DS_Store",
+    ".update_backups/**"
+  ],
+  "required_dirs": [
+    "data/inbox",
+    "data/outbox",
+    "data/processed",
+    "data/failed",
+    "data/logs",
+    "data/wechat/sent",
+    "data/wechat/failed",
+    "data/wechat/logs"
+  ],
+  "verify_commands": [
+    "python -m unittest discover -s tests"
+  ]
+}
