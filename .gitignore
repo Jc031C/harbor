@@ -11,10 +11,13 @@ env/
 # Environment
 .env
 
-# Local data
-data/logs/
-data/inbox/
-data/outbox/
+# Local data files
+data/logs/*
+data/inbox/*
+data/outbox/*
+!data/logs/.gitkeep
+!data/inbox/.gitkeep
+!data/outbox/.gitkeep
 
 # OS / Editor
 .DS_Store
