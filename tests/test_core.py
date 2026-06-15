@@ -1,86 +1,82 @@
 import unittest
 
-from harbor.core.engine import HarborCore
-from harbor.core.models import HarborRequest
+from harbor.core.config import load_config
+from harbor.core.router import Router
+from harbor.core.task import build_task
+from harbor.workers.gpt_desktop_worker import GPTDesktopWorker
+from harbor.workers.mock_worker import MockWorker
+from harbor.workers.system_worker import SystemWorker
 
 
-class TestHarborCore(unittest.TestCase):
+class TestHarborCoreStandardFlow(unittest.TestCase):
     def setUp(self):
-        self.core = HarborCore()
+        self.config = load_config()
+        self.router = Router(self.config)
 
-    def test_hello_message(self):
-        request = HarborRequest(
+    def test_build_task_from_mock_command(self):
+        task = build_task(
             source="test",
-            sender="tester",
-            text="你好",
+            sender="developer",
+            raw_text="/mock hello harbor",
         )
 
-        response = self.core.handle(request)
+        self.assertEqual(task.command, "/mock")
+        self.assertEqual(task.content, "hello harbor")
 
-        self.assertTrue(response.success)
-        self.assertIn("Harbor Core", response.text)
-        self.assertEqual(response.handled_by, "harbor-core")
-
-    def test_empty_message(self):
-        request = HarborRequest(
+    def test_router_routes_mock_to_mock_worker(self):
+        task = build_task(
             source="test",
-            sender="tester",
-            text="   ",
+            sender="developer",
+            raw_text="/mock hello harbor",
         )
 
-        response = self.core.handle(request)
+        worker = self.router.route(task)
 
-        self.assertFalse(response.success)
-        self.assertIn("空消息", response.text)
+        self.assertIsInstance(worker, MockWorker)
 
-    def test_status_message(self):
-        request = HarborRequest(
+    def test_router_routes_gpt_to_gpt_desktop_worker(self):
+        task = build_task(
             source="test",
-            sender="tester",
-            text="状态",
+            sender="developer",
+            raw_text="/gpt 测试内容",
         )
 
-        response = self.core.handle(request)
+        worker = self.router.route(task)
 
-        self.assertTrue(response.success)
-        self.assertIn("运行中", response.text)
+        self.assertIsInstance(worker, GPTDesktopWorker)
 
-    def test_help_message(self):
-        request = HarborRequest(
+    def test_router_routes_help_to_system_worker(self):
+        task = build_task(
             source="test",
-            sender="tester",
-            text="帮助",
+            sender="developer",
+            raw_text="/help",
         )
 
-        response = self.core.handle(request)
+        worker = self.router.route(task)
 
-        self.assertTrue(response.success)
-        self.assertIn("当前可用指令", response.text)
+        self.assertIsInstance(worker, SystemWorker)
 
-    def test_mock_llm_message(self):
-        request = HarborRequest(
+    def test_router_routes_status_to_system_worker(self):
+        task = build_task(
             source="test",
-            sender="tester",
-            text="问 Harbor 是什么",
+            sender="developer",
+            raw_text="/status",
         )
 
-        response = self.core.handle(request)
+        worker = self.router.route(task)
 
-        self.assertTrue(response.success)
-        self.assertEqual(response.handled_by, "mock-llm-connector")
-        self.assertIn("Harbor 是什么", response.text)
+        self.assertIsInstance(worker, SystemWorker)
 
-    def test_unknown_message(self):
-        request = HarborRequest(
+    def test_router_routes_unknown_to_system_worker(self):
+        task = build_task(
             source="test",
-            sender="tester",
-            text="测试普通消息",
+            sender="developer",
+            raw_text="/abc hello",
         )
 
-        response = self.core.handle(request)
+        worker = self.router.route(task)
 
-        self.assertTrue(response.success)
-        self.assertIn("测试普通消息", response.text)
+        self.assertIsInstance(worker, SystemWorker)
 
 
 if __name__ == "__main__":

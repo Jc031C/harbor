@@ -1,63 +1,86 @@
 import unittest
 
-from harbor.core.main_loop import HarborMainLoop
-from harbor.core.models import HarborRequest
+from harbor.bridges.base_bridge import BridgeInput
+from harbor.core.config import load_config
+from harbor.core.router import Router
+from harbor.main import handle_bridge_input
+from harbor.services.permission_service import PermissionService
 
 
-class FakeBridge:
-    def __init__(self, requests):
-        self.requests = list(requests)
+class FakeLogger:
+    def info(self, *args, **kwargs):
+        pass
 
-    def receive(self):
-        if not self.requests:
-            return None
-
-        return self.requests.pop(0)
+    def warning(self, *args, **kwargs):
+        pass
 
 
-class FakeReturnChannel:
-    def __init__(self):
-        self.responses = []
+class TestHarborMainFlow(unittest.TestCase):
+    def setUp(self):
+        self.config = load_config()
+        self.router = Router(self.config)
+        self.permission_service = PermissionService(self.config)
+        self.logger = FakeLogger()
 
-    def send(self, response):
-        self.responses.append(response)
-
-
-class TestHarborMainLoop(unittest.TestCase):
-    def test_run_once_handles_one_message(self):
-        bridge = FakeBridge([
-            HarborRequest(
-                source="test",
-                sender="tester",
-                text="你好",
-            )
-        ])
-        return_channel = FakeReturnChannel()
-
-        loop = HarborMainLoop(
-            bridge=bridge,
-            return_channel=return_channel,
+    def handle_text(self, raw_text: str, sender: str = "developer"):
+        bridge_input = BridgeInput(
+            source="mock_bridge",
+            sender=sender,
+            raw_text=raw_text,
         )
 
-        result = loop.run_once()
-
-        self.assertTrue(result)
-        self.assertEqual(len(return_channel.responses), 1)
-        self.assertIn("Harbor Core", return_channel.responses[0].text)
-
-    def test_run_once_stops_when_no_message(self):
-        bridge = FakeBridge([])
-        return_channel = FakeReturnChannel()
-
-        loop = HarborMainLoop(
-            bridge=bridge,
-            return_channel=return_channel,
+        return handle_bridge_input(
+            bridge_input=bridge_input,
+            router=self.router,
+            permission_service=self.permission_service,
+            logger=self.logger,
         )
 
-        result = loop.run_once()
+    def test_mock_command(self):
+        result = self.handle_text("/mock hello harbor")
 
-        self.assertFalse(result)
-        self.assertEqual(len(return_channel.responses), 0)
+        self.assertTrue(result.success)
+        self.assertEqual(result.worker_name, "mock_worker")
+        self.assertIn("hello harbor", result.message)
+
+    def test_help_command(self):
+        result = self.handle_text("/help")
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.worker_name, "system_worker")
+        self.assertIn("可用命令", result.message)
+
+    def test_status_command(self):
+        result = self.handle_text("/status")
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.worker_name, "system_worker")
+        self.assertIn("运行中", result.message)
+
+    def test_gpt_command_placeholder(self):
+        result = self.handle_text("/gpt 测试内容")
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.worker_name, "gpt_desktop_worker")
+        self.assertIn("占位回复", result.message)
+        self.assertIn("测试内容", result.message)
+
+    def test_unknown_command(self):
+        result = self.handle_text("/abc hello")
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.worker_name, "system_worker")
+        self.assertIn("未知命令", result.message)
+
+    def test_permission_denied_for_non_whitelist_sender(self):
+        result = self.handle_text(
+            raw_text="/mock hello harbor",
+            sender="unknown-user",
+        )
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.worker_name, "permission_service")
+        self.assertIn("权限拒绝", result.message)
 
 
 if __name__ == "__main__":

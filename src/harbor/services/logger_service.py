@@ -2,9 +2,9 @@ import logging
 from pathlib import Path
 
 
-def get_logger(name: str = "harbor") -> logging.Logger:
-    log_dir = Path("data") / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
+def get_logger(name: str = "harbor", log_path: str = "data/logs/harbor.log") -> logging.Logger:
+    path = Path(log_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
 
     logger = logging.getLogger(name)
 
@@ -22,7 +22,7 @@ def get_logger(name: str = "harbor") -> logging.Logger:
     console_handler.setFormatter(formatter)
 
     file_handler = logging.FileHandler(
-        log_dir / "harbor.log",
+        path,
         encoding="utf-8"
     )
     file_handler.setFormatter(formatter)
