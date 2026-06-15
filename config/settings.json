@@ -1,11 +1,22 @@
 {
   "app": {
     "name": "Harbor",
-    "version": "0.1.1",
+    "version": "0.2.0",
     "debug": true
   },
   "bridge": {
-    "default": "mock"
+    "default": "local_queue",
+    "enabled": [
+      "mock",
+      "local_queue"
+    ]
+  },
+  "local_queue": {
+    "enabled": true,
+    "inbox_path": "data/inbox",
+    "outbox_path": "data/outbox",
+    "processed_path": "data/processed",
+    "failed_path": "data/failed"
   },
   "workers": {
     "enabled": [
@@ -16,13 +27,15 @@
   },
   "permission": {
     "whitelist": [
-      "developer"
+      "developer",
+      "JC"
     ]
   },
   "gpt_desktop": {
     "enabled": false
   },
   "logs": {
-    "path": "data/logs/harbor.log"
+    "path": "data/logs/harbor.log",
+    "error_path": "data/logs/errors.log"
   }
 }

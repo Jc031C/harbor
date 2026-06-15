@@ -15,9 +15,13 @@ env/
 data/logs/*
 data/inbox/*
 data/outbox/*
+data/processed/*
+data/failed/*
 !data/logs/.gitkeep
 !data/inbox/.gitkeep
 !data/outbox/.gitkeep
+!data/processed/.gitkeep
+!data/failed/.gitkeep
 
 # OS / Editor
 .DS_Store

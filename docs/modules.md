@@ -4,13 +4,19 @@
 
 Harbor 主入口。
 
-负责组装并执行 v0.1 主流程：
+负责组装并执行 v0.2 主流程：
 
 - Config
 - Logger
 - PermissionService
 - Router
-- MockBridge
+- Bridge
+- WorkerResult 输出
+
+`main.py` 会根据 `config/settings.json` 里的 `bridge.default` 选择入口：
+
+- `local_queue`：处理 `data/inbox/` 中当前存在的 JSON 文件后退出
+- `mock`：进入本地命令行 Mock Bridge 流程
 
 ## src/harbor/core/
 
@@ -20,13 +26,24 @@ Harbor 主入口。
 
 读取配置文件：
 
+```text
 config/settings.json
+```
 
 提供 HarborConfig。
 
+v0.2 已支持读取：
+
+- app 版本
+- bridge 默认入口
+- local_queue 路径配置
+- workers 配置
+- permission 白名单
+- logs 路径
+
 ### task.py
 
-定义 Harbor v0.1 标准模型：
+定义 Harbor 标准模型：
 
 - Task
 - WorkerResult
@@ -37,10 +54,10 @@ config/settings.json
 
 当前规则：
 
-- /mock -> mock_worker
-- /gpt -> gpt_desktop_worker
-- /help -> system_worker
-- /status -> system_worker
+- `/mock` -> mock_worker
+- `/gpt` -> gpt_desktop_worker
+- `/help` -> system_worker
+- `/status` -> system_worker
 - 未知命令 -> system_worker
 
 ## src/harbor/bridges/
@@ -58,15 +75,39 @@ Bridge 负责外部输入和输出。
 
 ### mock_bridge.py
 
-v0.1 本地命令行 Bridge。
+本地命令行 Bridge。
 
 用于本地运行验证。
+
+### local_queue_bridge.py
+
+v0.2 新增的本地文件消息队列 Bridge。
+
+职责：
+
+- 读取 `data/inbox/*.json`
+- 解析输入 JSON
+- 自动补齐 `created_at`
+- 转换为 BridgeInput
+- 调用 Harbor 主流程处理
+- 将结果写入 `data/outbox/`
+- 成功后移动原文件到 `data/processed/`
+- 失败后移动原文件到 `data/failed/`
+
+不负责：
+
+- 命令解析
+- Worker 选择
+- 权限判断
+- GPT 调用
+- 微信操作
+- 复杂业务逻辑
 
 ### wechat_bridge.py
 
 微信 Bridge 占位模块。
 
-v0.1 不接入真实微信。
+v0.2 不接入真实微信。
 
 ## src/harbor/workers/
 
@@ -90,15 +131,15 @@ System Worker。
 
 负责处理：
 
-- /help
-- /status
+- `/help`
+- `/status`
 - 未知命令
 
 ### gpt_desktop_worker.py
 
 GPT Desktop Worker 占位模块。
 
-v0.1 不执行真实 ChatGPT 桌面端调用。
+v0.2 不执行真实 ChatGPT 桌面端调用。
 
 ## src/harbor/services/
 
@@ -114,7 +155,9 @@ v0.1 不执行真实 ChatGPT 桌面端调用。
 
 白名单来自：
 
+```text
 config/settings.json
+```
 
 ## src/harbor/utils/
 

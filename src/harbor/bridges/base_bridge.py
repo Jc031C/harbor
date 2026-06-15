@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Optional, Protocol
+from dataclasses import dataclass, field
+from typing import Any, Optional, Protocol
 
 from harbor.core.task import WorkerResult
 
@@ -9,6 +9,7 @@ class BridgeInput:
     source: str
     sender: str
     raw_text: str
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class BaseBridge(Protocol):
