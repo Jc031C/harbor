@@ -21,7 +21,7 @@ class SystemWorker:
         return WorkerResult(
             success=True,
             message=(
-                "Harbor v0.1 可用命令：\n"
+                "Harbor 可用命令：\n"
                 "/mock 内容：使用 Mock Worker 测试任务链路\n"
                 "/gpt 内容：调用 GPT Desktop Worker 占位回复\n"
                 "/help：查看帮助\n"
@@ -49,7 +49,7 @@ class SystemWorker:
             success=False,
             message=(
                 f"未知命令：{task.command}\n"
-                "请使用 /help 查看 Harbor v0.1 支持的命令。"
+                "请使用 /help 查看 Harbor 支持的命令。"
             ),
             worker_name=self.name,
         )

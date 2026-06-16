@@ -152,7 +152,7 @@ class LocalQueueBridge:
     ) -> Path:
         output_payload = {
             "task_id": task_id,
-            "source": self.name,
+            "source": str(payload.get("source") or self.name),
             "receiver_id": payload.get("sender_id", ""),
             "receiver_name": payload.get("sender_name", ""),
             "success": result.success,
@@ -180,7 +180,7 @@ class LocalQueueBridge:
         payload = payload or {}
         output_payload = {
             "task_id": payload.get("task_id", uuid4().hex),
-            "source": self.name,
+            "source": str(payload.get("source") or self.name),
             "receiver_id": payload.get("sender_id", ""),
             "receiver_name": payload.get("sender_name", ""),
             "success": False,

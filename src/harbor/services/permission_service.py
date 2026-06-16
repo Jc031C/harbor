@@ -14,4 +14,4 @@ class PermissionService:
         return sender in whitelist
 
     def deny_message(self, sender: str) -> str:
-        return f"权限拒绝：用户 {sender} 不在 Harbor v0.1 白名单中。"
+        return f"权限拒绝：当前用户没有权限使用 Harbor：{sender}"

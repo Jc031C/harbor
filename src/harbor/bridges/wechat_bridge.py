@@ -391,6 +391,11 @@ class WeChatQueueAdapter:
         result_path: Path,
         payload: dict[str, Any],
     ) -> WeChatReply | None:
+        if "source" in payload:
+            source = str(payload.get("source") or "").strip()
+            if source != "wechat":
+                return None
+
         receiver_name = str(payload.get("receiver_name") or "").strip()
         receiver_id = str(payload.get("receiver_id") or "").strip()
         content = str(payload.get("content") or "").strip()
@@ -404,6 +409,9 @@ class WeChatQueueAdapter:
             return None
 
         if not self.is_allowed_sender(receiver_name):
+            return None
+
+        if "source" not in payload and not receiver_id.startswith("wechat_"):
             return None
 
         if receiver_id and not receiver_id.startswith("wechat_"):

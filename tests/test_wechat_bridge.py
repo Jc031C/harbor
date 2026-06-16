@@ -73,18 +73,33 @@ class TestWeChatQueueAdapter(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    def write_outbox_result(self, filename="wechat_result.json", receiver_name="JC"):
+    def write_outbox_result(
+        self,
+        filename="wechat_result.json",
+        receiver_name="JC",
+        source="wechat",
+        receiver_id=None,
+    ):
         self.outbox_path.mkdir(parents=True, exist_ok=True)
         result_path = self.outbox_path / filename
         payload = {
             "task_id": "task_001",
-            "source": "local_queue",
-            "receiver_id": f"wechat_{receiver_name}",
+            "source": source,
+            "receiver_id": receiver_id if receiver_id is not None else f"wechat_{receiver_name}",
             "receiver_name": receiver_name,
             "success": True,
             "content": "Mock Worker 已收到：hello harbor",
             "created_at": "2026-06-15 10:00:00",
         }
+        with result_path.open("w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+        return result_path
+
+    def write_legacy_outbox_result(self, filename="legacy_wechat_result.json"):
+        result_path = self.write_outbox_result(filename=filename, source="wechat")
+        with result_path.open("r", encoding="utf-8") as file:
+            payload = json.load(file)
+        payload.pop("source")
         with result_path.open("w", encoding="utf-8") as file:
             json.dump(payload, file, ensure_ascii=False, indent=2)
         return result_path
@@ -165,6 +180,61 @@ class TestWeChatQueueAdapter(unittest.TestCase):
         self.assertFalse(result_path.exists())
         self.assertFalse((self.sent_path / result_path.name).exists())
         self.assertTrue((self.failed_path / result_path.name).exists())
+
+    def test_non_wechat_source_is_not_sent_or_moved(self):
+        result_path = self.write_outbox_result(
+            filename="local_queue_result.json",
+            source="local_queue",
+            receiver_id="wechat_JC",
+        )
+        client = FakeWeChatClient()
+
+        sent_count = self.adapter.process_outbox_once(client)
+
+        self.assertEqual(sent_count, 0)
+        self.assertEqual(client.sent_messages, [])
+        self.assertTrue(result_path.exists())
+        self.assertFalse((self.sent_path / result_path.name).exists())
+        self.assertFalse((self.failed_path / result_path.name).exists())
+
+    def test_wechat_source_result_can_be_sent(self):
+        result_path = self.write_outbox_result(source="wechat")
+        client = FakeWeChatClient()
+
+        sent_count = self.adapter.process_outbox_once(client)
+
+        self.assertEqual(sent_count, 1)
+        self.assertEqual(client.sent_messages, [("JC", "Mock Worker 已收到：hello harbor")])
+        self.assertFalse(result_path.exists())
+        self.assertTrue((self.sent_path / result_path.name).exists())
+
+    def test_legacy_result_without_source_uses_wechat_receiver_id(self):
+        result_path = self.write_legacy_outbox_result()
+        client = FakeWeChatClient()
+
+        sent_count = self.adapter.process_outbox_once(client)
+
+        self.assertEqual(sent_count, 1)
+        self.assertEqual(client.sent_messages, [("JC", "Mock Worker 已收到：hello harbor")])
+        self.assertFalse(result_path.exists())
+        self.assertTrue((self.sent_path / result_path.name).exists())
+
+    def test_legacy_result_without_source_requires_wechat_receiver_id(self):
+        result_path = self.write_legacy_outbox_result(filename="legacy_local_result.json")
+        with result_path.open("r", encoding="utf-8") as file:
+            payload = json.load(file)
+        payload["receiver_id"] = "jc_local"
+        with result_path.open("w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+        client = FakeWeChatClient()
+
+        sent_count = self.adapter.process_outbox_once(client)
+
+        self.assertEqual(sent_count, 0)
+        self.assertEqual(client.sent_messages, [])
+        self.assertTrue(result_path.exists())
+        self.assertFalse((self.sent_path / result_path.name).exists())
+        self.assertFalse((self.failed_path / result_path.name).exists())
 
     def test_wechat_unavailable_does_not_raise(self):
         written_count = self.adapter.process_incoming_once(wechat_client=None)

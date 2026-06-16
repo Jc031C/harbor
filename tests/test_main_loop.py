@@ -49,6 +49,7 @@ class TestHarborMainFlow(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(result.worker_name, "system_worker")
         self.assertIn("可用命令", result.message)
+        self.assertNotIn("v0.1", result.message)
 
     def test_status_command(self):
         result = self.handle_text("/status")
@@ -64,6 +65,7 @@ class TestHarborMainFlow(unittest.TestCase):
         self.assertEqual(result.worker_name, "gpt_desktop_worker")
         self.assertIn("占位回复", result.message)
         self.assertIn("测试内容", result.message)
+        self.assertNotIn("v0.1", result.message)
 
     def test_unknown_command(self):
         result = self.handle_text("/abc hello")
@@ -71,6 +73,7 @@ class TestHarborMainFlow(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertEqual(result.worker_name, "system_worker")
         self.assertIn("未知命令", result.message)
+        self.assertNotIn("v0.1", result.message)
 
     def test_permission_denied_for_non_whitelist_sender(self):
         result = self.handle_text(
@@ -81,6 +84,7 @@ class TestHarborMainFlow(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertEqual(result.worker_name, "permission_service")
         self.assertIn("权限拒绝", result.message)
+        self.assertNotIn("v0.1", result.message)
 
 
 if __name__ == "__main__":

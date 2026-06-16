@@ -133,6 +133,24 @@ class TestLocalQueueBridge(unittest.TestCase):
         self.assertIn("hello harbor", payload["content"])
         self.assertTrue(payload["task_id"])
 
+    def test_wechat_source_is_preserved_in_outbox_result(self):
+        self.write_inbox_json(
+            "wechat_mock.json",
+            {
+                "source": "wechat",
+                "sender_id": "wechat_JC",
+                "sender_name": "JC",
+                "message": "/mock hello harbor",
+            },
+        )
+
+        self.process_all()
+        payload = self.read_single_outbox_payload()
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["source"], "wechat")
+        self.assertEqual(payload["receiver_id"], "wechat_JC")
+
     def test_successful_input_file_moves_to_processed(self):
         self.write_inbox_json(
             "test_mock.json",

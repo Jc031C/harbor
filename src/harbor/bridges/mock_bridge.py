@@ -39,6 +39,6 @@ class MockBridge:
 
     def _print_start_message(self) -> None:
         print("Harbor Mock Bridge 已启动。")
-        print("当前 v0.1 支持命令：/mock、/gpt、/help、/status")
+        print("当前支持命令：/mock、/gpt、/help、/status")
         print("输入 exit、quit、q 或 退出 可以关闭。")
         print("")

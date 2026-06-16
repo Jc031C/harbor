@@ -22,7 +22,7 @@ class GPTDesktopWorker:
             return WorkerResult(
                 success=True,
                 message=(
-                    "GPT Desktop Worker 当前是 v0.1 占位回复。\n"
+                    "GPT Desktop Worker 尚未启用，这是占位回复。\n"
                     "真实 ChatGPT 桌面端接入尚未启用。\n"
                     f"已收到测试内容：{content}"
                 ),
@@ -32,7 +32,7 @@ class GPTDesktopWorker:
         return WorkerResult(
             success=True,
             message=(
-                "GPT Desktop Worker 配置已启用，但 v0.1 不执行真实桌面端调用。\n"
+                "GPT Desktop Worker 配置已启用，但当前不执行真实桌面端调用。\n"
                 f"已收到测试内容：{content}"
             ),
             worker_name=self.name,
