@@ -1,6 +1,6 @@
 # Harbor Roadmap
 
-## v0.1.0 标准化整理
+## 早期标准化整理
 
 目标：
 
@@ -39,7 +39,7 @@
 - Local Queue 相关测试已加入
 - 旧 v0.1 测试仍然通过
 
-## v0.3.0 WeChat Queue Adapter
+## v0.3.1 WeChat Queue Adapter 本地验证准备
 
 目标：
 
@@ -63,9 +63,12 @@
 - 新增 `data/wechat/sent/`、`data/wechat/failed/`、`data/wechat/logs/`
 - 新增 `tests/test_wechat_bridge.py`
 - 新增 `scripts/start_wechat_bridge.bat`
-- `pyproject.toml` 已升级到 v0.3.0
-- README 和 docs 已同步到 v0.3.0
-- 旧 v0.1 / v0.2 测试仍然通过
+- `pyproject.toml` 已升级到 v0.3.1
+- `config/settings.json` 已升级到 v0.3.1
+- README 和 docs 已同步到 v0.3.1
+- `.env.example` 已同步到 v0.3.1
+- `.gitattributes` 已加入，减少 Windows / Linux / Codespaces 换行差异
+- 既有历史测试仍然通过
 
 ## v0.4.0 GPT Desktop Worker 原型
 

@@ -3,11 +3,10 @@
 ## 当前版本
 
 ```text
-v0.3.0 WeChat Queue Adapter
 v0.3.1 微信本地验证准备小修
 ```
 
-v0.3.0 已在 Local Queue Bridge 基础上加入 WeChat Queue Adapter。v0.3.1 只做 Windows 本地微信验证前的小修：补充启动脚本、更新运行手册、清理旧版本固定提示，并加强 WeChat outbox 发送过滤。
+v0.3.1 已在 Local Queue Bridge 基础上加入 WeChat Queue Adapter，并完成 Windows 本地微信验证前的小修：补充启动脚本、更新运行手册、清理旧版本固定提示，并加强 WeChat outbox 发送过滤。
 
 真实微信自动化默认关闭：
 

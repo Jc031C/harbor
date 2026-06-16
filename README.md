@@ -4,7 +4,7 @@ Harbor 是一个家庭服务器 Agent 中枢项目。
 
 它的目标不是单独做一个聊天机器人，而是成为家庭服务器的核心调度中心。
 
-当前版本：v0.3.0 WeChat Queue Adapter 最小可运行版
+当前版本：v0.3.1 WeChat Queue Adapter 本地验证准备版
 
 ## v0.3 当前定位
 
@@ -161,7 +161,7 @@ Harbor Core 处理完成后，`data/outbox/` 会出现类似：
 ```json
 {
   "task_id": "xxx",
-  "source": "local_queue",
+  "source": "wechat",
   "receiver_id": "wechat_JC",
   "receiver_name": "JC",
   "success": true,
@@ -189,6 +189,19 @@ data/wechat/failed/
 ```text
 data/wechat/logs/wechat_bridge.log
 ```
+
+## 打包 zip 注意事项
+
+以后打包 Harbor 项目 zip 时，不建议包含：
+
+- `.git/`
+- `.venv/`
+- `__pycache__/`
+- `src/harbor.egg-info/`
+- `data/logs/*.log`
+- 其他本地运行缓存
+
+这些文件不是源码，可能导致压缩包过大、跨电脑不可用、Git 状态混乱，或者暴露本地运行信息。
 
 ## Local Queue 使用示例
 
@@ -275,8 +288,8 @@ harbor/
 
 ## 后续路线
 
-1. v0.1.0：标准化核心骨架，已完成
+1. 早期标准化核心骨架，已完成
 2. v0.2.0：Local Queue Bridge，已完成
-3. v0.3.0：WeChat Queue Adapter，已完成
+3. v0.3.1：WeChat Queue Adapter 本地验证准备，已完成
 4. v0.4.0：GPT Desktop Worker 原型
 5. v1.0.0：家庭服务器 Agent 中枢
