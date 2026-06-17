@@ -44,7 +44,7 @@ class TestWeChatQueueAdapter(unittest.TestCase):
 
         self.config = HarborConfig(
             settings={
-                "app": {"name": "Harbor", "version": "0.3.1", "debug": True},
+                "app": {"name": "Harbor", "version": "0.3.2", "debug": True},
                 "bridge": {
                     "default": "local_queue",
                     "enabled": ["mock", "local_queue", "wechat_queue_adapter"],

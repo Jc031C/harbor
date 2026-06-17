@@ -14,7 +14,7 @@ class HarborConfig:
 
     @property
     def version(self) -> str:
-        return self.settings.get("app", {}).get("version", "0.3.1")
+        return self.settings.get("app", {}).get("version", "0.3.2")
 
     @property
     def debug(self) -> bool:

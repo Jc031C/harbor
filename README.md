@@ -4,7 +4,7 @@ Harbor 是一个家庭服务器 Agent 中枢项目。
 
 它的目标不是单独做一个聊天机器人，而是成为家庭服务器的核心调度中心。
 
-当前版本：v0.3.1 WeChat Queue Adapter 本地验证准备版
+当前版本：v0.3.2 wxauto4 兼容准备版
 
 ## v0.3 当前定位
 
@@ -291,5 +291,6 @@ harbor/
 1. 早期标准化核心骨架，已完成
 2. v0.2.0：Local Queue Bridge，已完成
 3. v0.3.1：WeChat Queue Adapter 本地验证准备，已完成
-4. v0.4.0：GPT Desktop Worker 原型
-5. v1.0.0：家庭服务器 Agent 中枢
+4. v0.3.2：wxauto4 兼容准备，已完成
+5. v0.4.0：GPT Desktop Worker 原型
+6. v1.0.0：家庭服务器 Agent 中枢

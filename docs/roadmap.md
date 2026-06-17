@@ -70,6 +70,30 @@
 - `.gitattributes` 已加入，减少 Windows / Linux / Codespaces 换行差异
 - 既有历史测试仍然通过
 
+## v0.3.2 wxauto4 兼容准备
+
+目标：
+
+- 为 Windows 微信 4.x 真实验证做兼容准备
+- 新增微信自动化库加载层
+- 优先加载 `wxauto4`，失败后 fallback 到 `wxauto`
+- 保持 WeChat Bridge 默认关闭
+- 不让 Harbor Core 强制依赖 `wxauto` 或 `wxauto4`
+- 保持微信模块通过 `data/inbox/`、`data/outbox/` 与 Harbor Core 解耦
+
+当前状态：已完成。
+
+已完成内容：
+
+- 新增 `src/harbor/bridges/wechat_client_loader.py`
+- WeChat Bridge 改为通过 loader 获取自动化客户端
+- 新增 loader 导入顺序和 fallback 测试
+- `pyproject.toml` 已升级到 v0.3.2
+- `config/settings.json` 已升级到 v0.3.2
+- README 和 docs 已同步到 v0.3.2
+- `.env.example` 已同步到 v0.3.2
+- 既有历史测试仍然通过
+
 ## v0.4.0 GPT Desktop Worker 原型
 
 目标：
