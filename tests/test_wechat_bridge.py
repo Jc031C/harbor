@@ -1,8 +1,12 @@
+import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
+from harbor.bridges import wechat_bridge
 from harbor.bridges.wechat_bridge import WeChatIncomingMessage, WeChatQueueAdapter
 from harbor.core.config import HarborConfig
 
@@ -22,6 +26,10 @@ class FakeWeChatClient:
         if self.fail_send:
             raise RuntimeError("simulated send failure")
         self.sent_messages.append((contact_name, content))
+
+
+class FakeWxAutoClient:
+    pass
 
 
 class TestWeChatQueueAdapter(unittest.TestCase):
@@ -243,6 +251,20 @@ class TestWeChatQueueAdapter(unittest.TestCase):
         self.assertEqual(written_count, 0)
         self.assertEqual(sent_count, 0)
         self.assertTrue((self.logs_path / "wechat_bridge.log").exists())
+
+    def test_wxauto_client_uses_loader(self):
+        with patch.object(wechat_bridge, "load_wechat_client", return_value=FakeWxAutoClient):
+            client = wechat_bridge.WxAutoWeChatClient(target_contact_name="JC")
+
+        self.assertIsInstance(client.wx, FakeWxAutoClient)
+
+    def test_main_exits_without_loading_client_when_wechat_disabled(self):
+        with patch.object(wechat_bridge, "load_config", return_value=self.config):
+            with patch.object(wechat_bridge, "build_default_wechat_client") as build_client:
+                with redirect_stdout(io.StringIO()):
+                    wechat_bridge.main()
+
+        build_client.assert_not_called()
 
 
 if __name__ == "__main__":

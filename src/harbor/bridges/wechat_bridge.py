@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
 
+from harbor.bridges.wechat_client_loader import WeChatClientLoadError, load_wechat_client
 from harbor.core.config import HarborConfig, load_config
 
 
@@ -58,10 +59,10 @@ class WxAutoWeChatClient:
             )
 
         try:
-            from wxauto import WeChat  # type: ignore
-        except ImportError as exc:
+            WeChat = load_wechat_client()
+        except WeChatClientLoadError as exc:
             raise WeChatUnavailableError(
-                "未安装 wxauto。真实微信验证前，请在 Windows 环境执行：python -m pip install wxauto"
+                f"{exc}"
             ) from exc
 
         try:
