@@ -94,6 +94,29 @@
 - `.env.example` 已同步到 v0.3.2
 - 既有历史测试仍然通过
 
+## v0.3.3-dev WeChat send_only 懒加载
+
+目标：
+
+- 增加 `wechat.mode`
+- 默认使用 `send_only`
+- `send_only` 不监听微信输入
+- 没有待发送 outbox 结果时，不初始化 wxauto4
+- 有待发送微信结果时，才初始化 wxauto4
+- 初始化使用 `WeChat(ads=False, resize=False)`
+- 不在 Harbor 主流程中调用 `wx.Show()`
+- 发送前执行 `ChatWith` 和 `ChatInfo` 目标校验
+- 校验成功后执行 `SendMsg(content)`，不传联系人名
+
+当前状态：开发中。
+
+边界：
+
+- 不接 GPT Desktop
+- 不接 NAS
+- 不改变 Harbor Core 主链路
+- 真实微信监听读取留到 `listen` 模式后续验证
+
 ## v0.4.0 GPT Desktop Worker 原型
 
 目标：

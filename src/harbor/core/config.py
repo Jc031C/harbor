@@ -54,6 +54,11 @@ class HarborConfig:
         return bool(self.settings.get("wechat", {}).get("enabled", False))
 
     @property
+    def wechat_mode(self) -> str:
+        mode = str(self.settings.get("wechat", {}).get("mode", "send_only")).strip().lower()
+        return mode or "send_only"
+
+    @property
     def wechat_target_contact_name(self) -> str:
         return self.settings.get("wechat", {}).get("target_contact_name", "")
 
@@ -112,7 +117,7 @@ def load_config(path: str | Path = "config/settings.json") -> HarborConfig:
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
-    with config_path.open("r", encoding="utf-8") as file:
+    with config_path.open("r", encoding="utf-8-sig") as file:
         settings = json.load(file)
 
     return HarborConfig(settings=settings)

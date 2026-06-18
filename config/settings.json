@@ -41,6 +41,7 @@
   },
   "wechat": {
     "enabled": false,
+    "mode": "send_only",
     "target_contact_name": "",
     "allowed_senders": [
       "JC"

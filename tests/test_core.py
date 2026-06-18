@@ -1,6 +1,10 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from harbor.core.config import load_config
+from harbor.core.config import HarborConfig
 from harbor.core.router import Router
 from harbor.core.task import build_task
 from harbor.workers.gpt_desktop_worker import GPTDesktopWorker
@@ -77,6 +81,38 @@ class TestHarborCoreStandardFlow(unittest.TestCase):
         worker = self.router.route(task)
 
         self.assertIsInstance(worker, SystemWorker)
+
+
+class TestHarborConfig(unittest.TestCase):
+    def test_load_config_reads_utf8_bom_json(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "settings.json"
+            payload = {
+                "app": {"name": "Harbor", "version": "0.3.3-dev"},
+                "wechat": {"mode": "Listen"},
+            }
+            config_path.write_text(
+                json.dumps(payload, ensure_ascii=False),
+                encoding="utf-8-sig",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.app_name, "Harbor")
+        self.assertEqual(config.wechat_mode, "listen")
+
+    def test_wechat_mode_is_normalized(self):
+        cases = [
+            (" send_only ", "send_only"),
+            ("Listen", "listen"),
+            ("", "send_only"),
+        ]
+
+        for raw_mode, expected_mode in cases:
+            with self.subTest(raw_mode=raw_mode):
+                config = HarborConfig(settings={"wechat": {"mode": raw_mode}})
+
+                self.assertEqual(config.wechat_mode, expected_mode)
 
 
 if __name__ == "__main__":

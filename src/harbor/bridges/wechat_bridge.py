@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 from uuid import uuid4
 
 from harbor.bridges.wechat_client_loader import WeChatClientLoadError, load_wechat_client
@@ -52,7 +52,7 @@ class WxAutoWeChatClient:
     a fake client instead of using wxauto or a real Windows WeChat session.
     """
 
-    def __init__(self, target_contact_name: str):
+    def __init__(self, target_contact_name: str, enable_listener: bool = False):
         if not target_contact_name:
             raise WeChatUnavailableError(
                 "wechat.target_contact_name 为空。请先在 config/settings.json 中填写测试联系人。"
@@ -66,7 +66,7 @@ class WxAutoWeChatClient:
             ) from exc
 
         try:
-            self.wx = WeChat()
+            self.wx = WeChat(ads=False, resize=False)
         except Exception as exc:  # noqa: BLE001 - external UI automation can fail broadly.
             raise WeChatUnavailableError(
                 "无法连接 Windows 微信客户端。请确认微信已打开、已登录，并且窗口未被系统阻止。"
@@ -78,7 +78,8 @@ class WxAutoWeChatClient:
         self._poll_initialized = False
         self._listening = False
 
-        self._try_enable_listener()
+        if enable_listener:
+            self._try_enable_listener()
 
     def get_messages(self) -> list[WeChatIncomingMessage]:
         if self._listening:
@@ -90,7 +91,29 @@ class WxAutoWeChatClient:
 
     def send_message(self, contact_name: str, content: str) -> None:
         try:
-            self.wx.SendMsg(content, contact_name)
+            chat_with = getattr(self.wx, "ChatWith", None)
+            if not callable(chat_with):
+                raise WeChatUnavailableError("当前 wxauto 版本不支持 ChatWith，无法切换微信联系人。")
+
+            chat_info = getattr(self.wx, "ChatInfo", None)
+            if not callable(chat_info):
+                raise WeChatUnavailableError("当前 wxauto 版本不支持 ChatInfo，无法校验微信联系人。")
+
+            send_msg = getattr(self.wx, "SendMsg", None)
+            if not callable(send_msg):
+                raise WeChatUnavailableError("当前 wxauto 版本不支持 SendMsg，无法发送微信消息。")
+
+            chat_with(contact_name, exact=True)
+            info = chat_info()
+
+            if not isinstance(info, dict) or info.get("chat_name") != contact_name:
+                raise WeChatUnavailableError(
+                    f"微信目标联系人校验失败：expected={contact_name} actual={info}"
+                )
+
+            send_msg(content)
+        except WeChatUnavailableError:
+            raise
         except Exception as exc:  # noqa: BLE001 - external UI automation can fail broadly.
             raise WeChatUnavailableError(f"发送微信消息失败：{exc}") from exc
 
@@ -223,6 +246,7 @@ class WeChatQueueAdapter:
         reply_check_interval_seconds: int = 2,
         auto_reply: bool = True,
         enabled: bool = False,
+        mode: str = "send_only",
     ):
         self.inbox_path = Path(inbox_path)
         self.outbox_path = Path(outbox_path)
@@ -235,6 +259,7 @@ class WeChatQueueAdapter:
         self.reply_check_interval_seconds = max(1, int(reply_check_interval_seconds))
         self.auto_reply = bool(auto_reply)
         self.enabled = bool(enabled)
+        self.mode = mode.strip() or "send_only"
         self.log_file_path = self.logs_path / "wechat_bridge.log"
         self._ensure_directories()
 
@@ -252,6 +277,7 @@ class WeChatQueueAdapter:
             reply_check_interval_seconds=config.wechat_reply_check_interval_seconds,
             auto_reply=config.wechat_auto_reply,
             enabled=config.wechat_enabled,
+            mode=config.wechat_mode,
         )
 
     def process_incoming_once(self, wechat_client: WeChatClient | None) -> int:
@@ -343,6 +369,14 @@ class WeChatQueueAdapter:
     def process_outbox_once(self, wechat_client: WeChatClient | None) -> int:
         """Send one batch of Harbor outbox results back to WeChat."""
         replies = self.collect_pending_replies()
+        return self.process_outbox_replies_once(wechat_client, replies)
+
+    def process_outbox_replies_once(
+        self,
+        wechat_client: WeChatClient | None,
+        replies: list[WeChatReply],
+    ) -> int:
+        """Send a pre-collected batch of Harbor outbox results back to WeChat."""
         sent_count = 0
 
         if not self.auto_reply:
@@ -368,6 +402,29 @@ class WeChatQueueAdapter:
 
         return sent_count
 
+    def process_send_only_once(self, client_factory: Callable[[], WeChatClient]) -> int:
+        """Process pending replies without initializing WeChat when there is nothing to send."""
+        if not self.auto_reply:
+            self._append_log("wechat.auto_reply=false，跳过自动回复。")
+            return 0
+
+        replies = self.collect_pending_replies()
+        if not replies:
+            return 0
+
+        try:
+            wechat_client = client_factory()
+        except Exception as exc:  # noqa: BLE001 - external UI automation can fail broadly.
+            self._append_log(f"初始化微信客户端失败：{exc}")
+            return self.process_outbox_replies_once(None, replies)
+
+        try:
+            return self.process_outbox_replies_once(wechat_client, replies)
+        finally:
+            stop = getattr(wechat_client, "stop", None)
+            if callable(stop):
+                stop()
+
     def run_forever(self, wechat_client: WeChatClient) -> None:
         """Run the adapter as a small standalone bridge process."""
         self._append_log("WeChat Queue Adapter 已启动。")
@@ -383,6 +440,17 @@ class WeChatQueueAdapter:
             stop = getattr(wechat_client, "stop", None)
             if callable(stop):
                 stop()
+
+    def run_send_only_forever(self, client_factory: Callable[[], WeChatClient]) -> None:
+        """Run the adapter in send-only mode with lazy WeChat client creation."""
+        self._append_log("WeChat Queue Adapter 已启动：send_only。")
+
+        try:
+            while True:
+                self.process_send_only_once(client_factory)
+                time.sleep(self.reply_check_interval_seconds)
+        except KeyboardInterrupt:
+            self._append_log("WeChat Queue Adapter 收到停止信号。")
 
     def is_allowed_sender(self, sender_name: str) -> bool:
         return sender_name in self.allowed_senders
@@ -482,7 +550,10 @@ class WeChatQueueAdapter:
 
 
 def build_default_wechat_client(config: HarborConfig) -> WxAutoWeChatClient:
-    return WxAutoWeChatClient(target_contact_name=config.wechat_target_contact_name)
+    return WxAutoWeChatClient(
+        target_contact_name=config.wechat_target_contact_name,
+        enable_listener=config.wechat_mode == "listen",
+    )
 
 
 def main() -> None:
@@ -494,13 +565,22 @@ def main() -> None:
         return
 
     try:
+        if config.wechat_mode == "send_only":
+            print("WeChat Queue Adapter 已启动：send_only。按 Ctrl+C 停止。")
+            adapter.run_send_only_forever(lambda: build_default_wechat_client(config))
+            return
+
+        if config.wechat_mode != "listen":
+            print(f"不支持的 wechat.mode：{config.wechat_mode}")
+            return
+
         client = build_default_wechat_client(config)
     except WeChatUnavailableError as exc:
         adapter._append_log(str(exc))
         print(str(exc))
         return
 
-    print("WeChat Queue Adapter 已启动。按 Ctrl+C 停止。")
+    print("WeChat Queue Adapter 已启动：listen。按 Ctrl+C 停止。")
     adapter.run_forever(client)
 
 

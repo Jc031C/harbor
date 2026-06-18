@@ -3,10 +3,10 @@
 ## 当前版本
 
 ```text
-v0.3.2 wxauto4 兼容准备小修
+v0.3.3-dev WeChat send_only 懒加载准备
 ```
 
-v0.3.2 是 wxauto4 兼容准备小修。当前 WeChat Queue Adapter 保持文件队列职责不变，并为 Windows 微信 4.x 环境增加微信自动化库加载层。
+v0.3.3-dev 在 wxauto4 兼容准备基础上，增加 `wechat.mode=send_only`。当前 WeChat Queue Adapter 保持文件队列职责不变，并避免在没有待发送 outbox 结果时初始化真实微信客户端。
 
 微信自动化库加载顺序：
 
@@ -18,12 +18,17 @@ v0.3.2 是 wxauto4 兼容准备小修。当前 WeChat Queue Adapter 保持文件
 ```json
 {
   "wechat": {
-    "enabled": false
+    "enabled": false,
+    "mode": "send_only"
   }
 }
 ```
 
 默认 `wechat.enabled=false` 时，不会加载真实微信客户端。本阶段不默认连接真实微信，不接入真实大模型 API。
+
+`wechat.mode=send_only` 时，WeChat Bridge 只扫描 `data/outbox/`，不监听微信输入。没有待发送微信结果时，不初始化 wxauto4；有待发送结果时才初始化 wxauto4。wxauto4 初始化可能把微信窗口带到前台，这是已知行为。Harbor 主流程不调用 `wx.Show()`。
+
+发送前必须先 `ChatWith` 切换目标联系人，再用 `ChatInfo` 校验 `chat_name`，校验成功后才执行 `SendMsg(content)`。不要使用 `SendMsg(content, contact_name)` 作为默认发送路径。
 
 ## Windows 本地准备
 
@@ -65,6 +70,10 @@ Windows 微信 4.x 环境建议使用 Python 3.12。`wxauto4` 只在进行真实
 .\.venv\Scripts\python.exe -c "from wxauto4 import WeChat; print('wxauto4 import ok')"
 ```
 
+Windows PowerShell 临时写 `settings.json` 时可能写入 UTF-8 BOM；Harbor 已兼容 `utf-8-sig`，但仍建议用 Python 写临时 JSON，或使用无 BOM UTF-8。
+
+wxauto4 可能生成 `wxauto_logs/`。该目录是本地运行日志，不纳入 Git。
+
 基础验证：
 
 ```bat
@@ -95,11 +104,14 @@ config/settings.json
 {
   "wechat": {
     "enabled": true,
+    "mode": "send_only",
     "target_contact_name": "测试联系人",
     "allowed_senders": ["JC"]
   }
 }
 ```
+
+如果需要监听微信消息，后续使用 `mode=listen`，但该模式会初始化真实微信客户端，仍需单独谨慎验证。
 
 不要把真实联系人、运行数据或临时消息提交到 Git。
 

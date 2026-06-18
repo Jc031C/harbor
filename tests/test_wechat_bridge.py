@@ -7,7 +7,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from harbor.bridges import wechat_bridge
-from harbor.bridges.wechat_bridge import WeChatIncomingMessage, WeChatQueueAdapter
+from harbor.bridges.wechat_bridge import (
+    WeChatIncomingMessage,
+    WeChatQueueAdapter,
+    WeChatUnavailableError,
+)
 from harbor.core.config import HarborConfig
 
 
@@ -29,7 +33,33 @@ class FakeWeChatClient:
 
 
 class FakeWxAutoClient:
-    pass
+    last_instance = None
+
+    def __init__(self, *args, chat_name="JC", **kwargs):
+        self.init_args = args
+        self.init_kwargs = kwargs
+        self.chat_name = chat_name
+        self.chat_with_calls = []
+        self.send_msg_calls = []
+        self.show_calls = 0
+        self.listen_calls = []
+        FakeWxAutoClient.last_instance = self
+
+    def ChatWith(self, contact_name, exact=True):
+        self.chat_with_calls.append((contact_name, exact))
+        return contact_name
+
+    def ChatInfo(self):
+        return {"chat_name": self.chat_name}
+
+    def SendMsg(self, *args):
+        self.send_msg_calls.append(args)
+
+    def Show(self):
+        self.show_calls += 1
+
+    def AddListenChat(self, contact_name, callback):
+        self.listen_calls.append((contact_name, callback))
 
 
 class TestWeChatQueueAdapter(unittest.TestCase):
@@ -58,6 +88,7 @@ class TestWeChatQueueAdapter(unittest.TestCase):
                 },
                 "wechat": {
                     "enabled": False,
+                    "mode": "send_only",
                     "target_contact_name": "",
                     "allowed_senders": ["JC"],
                     "poll_interval_seconds": 2,
@@ -252,11 +283,106 @@ class TestWeChatQueueAdapter(unittest.TestCase):
         self.assertEqual(sent_count, 0)
         self.assertTrue((self.logs_path / "wechat_bridge.log").exists())
 
+    def test_wechat_mode_defaults_to_send_only(self):
+        config = HarborConfig(settings={})
+
+        self.assertEqual(config.wechat_mode, "send_only")
+
+    def test_wechat_mode_is_read_from_config(self):
+        self.assertEqual(self.config.wechat_mode, "send_only")
+        self.assertEqual(self.adapter.mode, "send_only")
+
     def test_wxauto_client_uses_loader(self):
         with patch.object(wechat_bridge, "load_wechat_client", return_value=FakeWxAutoClient):
             client = wechat_bridge.WxAutoWeChatClient(target_contact_name="JC")
 
         self.assertIsInstance(client.wx, FakeWxAutoClient)
+        self.assertEqual(client.wx.init_kwargs, {"ads": False, "resize": False})
+        self.assertEqual(client.wx.show_calls, 0)
+        self.assertEqual(client.wx.listen_calls, [])
+
+    def test_wxauto_client_can_enable_listener_for_listen_mode(self):
+        with patch.object(wechat_bridge, "load_wechat_client", return_value=FakeWxAutoClient):
+            client = wechat_bridge.WxAutoWeChatClient(
+                target_contact_name="JC",
+                enable_listener=True,
+            )
+
+        self.assertEqual(len(client.wx.listen_calls), 1)
+        self.assertEqual(client.wx.listen_calls[0][0], "JC")
+        self.assertTrue(client._listening)
+
+    def test_wxauto_safe_send_checks_target_before_sending(self):
+        with patch.object(wechat_bridge, "load_wechat_client", return_value=FakeWxAutoClient):
+            client = wechat_bridge.WxAutoWeChatClient(target_contact_name="JC")
+
+        client.send_message("JC", "hello")
+
+        self.assertEqual(client.wx.chat_with_calls, [("JC", True)])
+        self.assertEqual(client.wx.send_msg_calls, [("hello",)])
+        self.assertEqual(client.wx.show_calls, 0)
+
+    def test_wxauto_safe_send_rejects_target_mismatch(self):
+        class MismatchFakeWxAutoClient(FakeWxAutoClient):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, chat_name="Other", **kwargs)
+
+        with patch.object(wechat_bridge, "load_wechat_client", return_value=MismatchFakeWxAutoClient):
+            client = wechat_bridge.WxAutoWeChatClient(target_contact_name="JC")
+
+        with self.assertRaises(WeChatUnavailableError):
+            client.send_message("JC", "hello")
+
+        self.assertEqual(client.wx.chat_with_calls, [("JC", True)])
+        self.assertEqual(client.wx.send_msg_calls, [])
+
+    def test_send_only_without_replies_does_not_build_client(self):
+        def build_client():
+            raise AssertionError("client should not be built without pending replies")
+
+        sent_count = self.adapter.process_send_only_once(build_client)
+
+        self.assertEqual(sent_count, 0)
+
+    def test_send_only_auto_reply_false_does_not_build_client(self):
+        self.adapter.auto_reply = False
+        self.write_outbox_result()
+
+        def build_client():
+            raise AssertionError("client should not be built when auto_reply=false")
+
+        sent_count = self.adapter.process_send_only_once(build_client)
+
+        self.assertEqual(sent_count, 0)
+
+    def test_send_only_with_replies_builds_client_and_sends(self):
+        result_path = self.write_outbox_result()
+        client = FakeWeChatClient()
+        build_calls = []
+
+        def build_client():
+            build_calls.append(True)
+            return client
+
+        sent_count = self.adapter.process_send_only_once(build_client)
+
+        self.assertEqual(sent_count, 1)
+        self.assertEqual(build_calls, [True])
+        self.assertEqual(client.sent_messages, [("JC", "Mock Worker 已收到：hello harbor")])
+        self.assertFalse(result_path.exists())
+        self.assertTrue((self.sent_path / result_path.name).exists())
+
+    def test_send_only_client_build_failure_moves_reply_to_failed(self):
+        result_path = self.write_outbox_result()
+
+        def build_client():
+            raise WeChatUnavailableError("simulated unavailable")
+
+        sent_count = self.adapter.process_send_only_once(build_client)
+
+        self.assertEqual(sent_count, 0)
+        self.assertFalse(result_path.exists())
+        self.assertTrue((self.failed_path / result_path.name).exists())
 
     def test_main_exits_without_loading_client_when_wechat_disabled(self):
         with patch.object(wechat_bridge, "load_config", return_value=self.config):
@@ -265,6 +391,39 @@ class TestWeChatQueueAdapter(unittest.TestCase):
                     wechat_bridge.main()
 
         build_client.assert_not_called()
+
+    def test_main_send_only_starts_without_eager_client_build(self):
+        settings = dict(self.config.settings)
+        settings["wechat"] = dict(settings["wechat"])
+        settings["wechat"]["enabled"] = True
+        settings["wechat"]["mode"] = "send_only"
+        config = HarborConfig(settings=settings)
+
+        with patch.object(wechat_bridge, "load_config", return_value=config):
+            with patch.object(wechat_bridge.WeChatQueueAdapter, "run_send_only_forever") as run_send_only:
+                with patch.object(wechat_bridge, "build_default_wechat_client") as build_client:
+                    with redirect_stdout(io.StringIO()):
+                        wechat_bridge.main()
+
+        run_send_only.assert_called_once()
+        build_client.assert_not_called()
+
+    def test_main_listen_mode_keeps_eager_client_build(self):
+        settings = dict(self.config.settings)
+        settings["wechat"] = dict(settings["wechat"])
+        settings["wechat"]["enabled"] = True
+        settings["wechat"]["mode"] = "listen"
+        config = HarborConfig(settings=settings)
+        fake_client = FakeWeChatClient()
+
+        with patch.object(wechat_bridge, "load_config", return_value=config):
+            with patch.object(wechat_bridge, "build_default_wechat_client", return_value=fake_client) as build_client:
+                with patch.object(wechat_bridge.WeChatQueueAdapter, "run_forever") as run_forever:
+                    with redirect_stdout(io.StringIO()):
+                        wechat_bridge.main()
+
+        build_client.assert_called_once_with(config)
+        run_forever.assert_called_once_with(fake_client)
 
 
 if __name__ == "__main__":
