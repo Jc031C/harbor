@@ -186,6 +186,110 @@ class TestWeChatQueueAdapter(unittest.TestCase):
         self.assertEqual(written_count, 0)
         self.assertEqual(list(self.inbox_path.glob("*.json")), [])
 
+    def test_listen_allowed_text_message_writes_to_inbox(self):
+        client = FakeWeChatClient(
+            incoming_messages=[
+                WeChatIncomingMessage(
+                    sender_name="JC",
+                    sender_id="wechat_JC",
+                    content="/mock listen",
+                )
+            ]
+        )
+
+        written_count = self.adapter.process_listen_once(client)
+        payload = self.read_single_inbox_payload()
+
+        self.assertEqual(written_count, 1)
+        self.assertEqual(payload["source"], "wechat")
+        self.assertEqual(payload["sender_id"], "wechat_JC")
+        self.assertEqual(payload["sender_name"], "JC")
+        self.assertEqual(payload["message"], "/mock listen")
+
+    def test_listen_rejects_non_allowed_sender(self):
+        client = FakeWeChatClient(
+            incoming_messages=[
+                WeChatIncomingMessage(
+                    sender_name="Stranger",
+                    sender_id="wechat_Stranger",
+                    content="/mock listen",
+                )
+            ]
+        )
+
+        written_count = self.adapter.process_listen_once(client)
+
+        self.assertEqual(written_count, 0)
+        self.assertEqual(list(self.inbox_path.glob("*.json")), [])
+
+    def test_listen_rejects_when_allowed_senders_is_empty(self):
+        self.adapter.allowed_senders = set()
+        client = FakeWeChatClient(
+            incoming_messages=[
+                WeChatIncomingMessage(
+                    sender_name="JC",
+                    sender_id="wechat_JC",
+                    content="/mock listen",
+                )
+            ]
+        )
+
+        written_count = self.adapter.process_listen_once(client)
+
+        self.assertEqual(written_count, 0)
+        self.assertEqual(list(self.inbox_path.glob("*.json")), [])
+
+    def test_listen_duplicate_message_does_not_write_twice(self):
+        message = WeChatIncomingMessage(
+            sender_name="JC",
+            sender_id="wechat_JC",
+            content="/mock listen",
+        )
+
+        first_count = self.adapter.process_listen_once(FakeWeChatClient([message]))
+        second_count = self.adapter.process_listen_once(FakeWeChatClient([message]))
+
+        self.assertEqual(first_count, 1)
+        self.assertEqual(second_count, 0)
+        self.assertEqual(len(list(self.inbox_path.glob("*.json"))), 1)
+        self.assertTrue((self.root_path / "wechat" / "listen_state.json").exists())
+
+    def test_listen_skips_non_text_message(self):
+        client = FakeWeChatClient(
+            incoming_messages=[
+                WeChatIncomingMessage(
+                    sender_name="JC",
+                    sender_id="wechat_JC",
+                    content=None,
+                )
+            ]
+        )
+
+        written_count = self.adapter.process_listen_once(client)
+
+        self.assertEqual(written_count, 0)
+        self.assertEqual(list(self.inbox_path.glob("*.json")), [])
+
+    def test_listen_does_not_send_or_process_outbox(self):
+        result_path = self.write_outbox_result()
+        client = FakeWeChatClient(
+            incoming_messages=[
+                WeChatIncomingMessage(
+                    sender_name="JC",
+                    sender_id="wechat_JC",
+                    content="/mock listen",
+                )
+            ]
+        )
+
+        written_count = self.adapter.process_listen_once(client)
+
+        self.assertEqual(written_count, 1)
+        self.assertEqual(client.sent_messages, [])
+        self.assertTrue(result_path.exists())
+        self.assertFalse((self.sent_path / result_path.name).exists())
+        self.assertFalse((self.failed_path / result_path.name).exists())
+
     def test_outbox_result_can_be_collected_as_pending_reply(self):
         result_path = self.write_outbox_result()
 
@@ -418,12 +522,12 @@ class TestWeChatQueueAdapter(unittest.TestCase):
 
         with patch.object(wechat_bridge, "load_config", return_value=config):
             with patch.object(wechat_bridge, "build_default_wechat_client", return_value=fake_client) as build_client:
-                with patch.object(wechat_bridge.WeChatQueueAdapter, "run_forever") as run_forever:
+                with patch.object(wechat_bridge.WeChatQueueAdapter, "run_listen_forever") as run_listen:
                     with redirect_stdout(io.StringIO()):
                         wechat_bridge.main()
 
         build_client.assert_called_once_with(config)
-        run_forever.assert_called_once_with(fake_client)
+        run_listen.assert_called_once_with(fake_client)
 
 
 if __name__ == "__main__":

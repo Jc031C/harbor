@@ -153,6 +153,14 @@ class WxAutoWeChatClient:
             if callable(chat_with):
                 chat_with(self.target_contact_name)
 
+            chat_info = getattr(self.wx, "ChatInfo", None)
+            if callable(chat_info):
+                info = chat_info()
+                if isinstance(info, dict) and info.get("chat_name") != self.target_contact_name:
+                    raise WeChatUnavailableError(
+                        f"微信目标联系人校验失败：expected={self.target_contact_name} actual={info}"
+                    )
+
             get_all_message = getattr(self.wx, "GetAllMessage", None)
             if not callable(get_all_message):
                 raise WeChatUnavailableError(
@@ -261,6 +269,7 @@ class WeChatQueueAdapter:
         self.enabled = bool(enabled)
         self.mode = mode.strip() or "send_only"
         self.log_file_path = self.logs_path / "wechat_bridge.log"
+        self.listen_state_path = self.logs_path.parent / "listen_state.json"
         self._ensure_directories()
 
     @classmethod
@@ -302,6 +311,41 @@ class WeChatQueueAdapter:
             )
             if output_path is not None:
                 written_count += 1
+
+        return written_count
+
+    def process_listen_once(self, wechat_client: WeChatClient | None) -> int:
+        """Read one batch of WeChat messages, dedupe it, and write allowed text to inbox."""
+        if wechat_client is None:
+            self._append_log("微信客户端不可用，跳过 listen 消息读取。")
+            return 0
+
+        try:
+            messages = wechat_client.get_messages()
+        except Exception as exc:  # noqa: BLE001 - external UI automation can fail broadly.
+            self._append_log(f"listen 读取微信消息失败：{exc}")
+            return 0
+
+        listen_state = self._load_listen_state()
+        last_fingerprint = str(listen_state.get("last_fingerprint") or "")
+        written_count = 0
+
+        for message in messages:
+            if not self._is_allowed_incoming_message(message):
+                continue
+
+            fingerprint = self._fingerprint_incoming_message(message)
+            if fingerprint == last_fingerprint:
+                continue
+
+            output_path = self._write_incoming_task(message)
+            if output_path is None:
+                continue
+
+            last_fingerprint = fingerprint
+            listen_state["last_fingerprint"] = fingerprint
+            self._save_listen_state(listen_state)
+            written_count += 1
 
         return written_count
 
@@ -452,8 +496,82 @@ class WeChatQueueAdapter:
         except KeyboardInterrupt:
             self._append_log("WeChat Queue Adapter 收到停止信号。")
 
+    def run_listen_forever(self, wechat_client: WeChatClient) -> None:
+        """Run the adapter in listen mode without sending WeChat replies."""
+        self._append_log("WeChat Queue Adapter 已启动：listen。")
+
+        try:
+            while True:
+                self.process_listen_once(wechat_client)
+                time.sleep(self.poll_interval_seconds)
+        except KeyboardInterrupt:
+            self._append_log("WeChat Queue Adapter 收到停止信号。")
+        finally:
+            stop = getattr(wechat_client, "stop", None)
+            if callable(stop):
+                stop()
+
     def is_allowed_sender(self, sender_name: str) -> bool:
         return sender_name in self.allowed_senders
+
+    def _is_allowed_incoming_message(self, message: WeChatIncomingMessage) -> bool:
+        sender_name = str(getattr(message, "sender_name", "") or "").strip()
+        content = getattr(message, "content", "")
+
+        if not sender_name or not isinstance(content, str) or not content.strip():
+            self._append_log("listen 收到非文本消息或空消息，已忽略。")
+            return False
+
+        if not self.allowed_senders:
+            self._append_log("wechat.allowed_senders 为空，listen 默认拒绝写入 inbox。")
+            return False
+
+        if not self.is_allowed_sender(sender_name):
+            self._append_log(f"listen 忽略非白名单联系人消息：{sender_name}")
+            return False
+
+        if self.target_contact_name and sender_name != self.target_contact_name:
+            self._append_log(
+                f"listen 忽略非目标联系人消息：sender={sender_name} target={self.target_contact_name}"
+            )
+            return False
+
+        return True
+
+    def _write_incoming_task(self, message: WeChatIncomingMessage) -> Path | None:
+        return self.write_incoming_message(
+            sender_name=message.sender_name,
+            message=message.content,
+            sender_id=message.sender_id,
+        )
+
+    def _fingerprint_incoming_message(self, message: WeChatIncomingMessage) -> str:
+        return "|".join(
+            [
+                str(getattr(message, "sender_name", "") or "").strip(),
+                str(getattr(message, "sender_id", "") or "").strip(),
+                str(getattr(message, "content", "") or "").strip(),
+            ]
+        )
+
+    def _load_listen_state(self) -> dict[str, Any]:
+        if not self.listen_state_path.exists():
+            return {}
+
+        try:
+            with self.listen_state_path.open("r", encoding="utf-8") as file:
+                state = json.load(file)
+        except Exception as exc:  # noqa: BLE001 - bad local state should not stop listen mode.
+            self._append_log(f"读取 listen_state 失败，已重置：{exc}")
+            return {}
+
+        return state if isinstance(state, dict) else {}
+
+    def _save_listen_state(self, state: dict[str, Any]) -> None:
+        self.listen_state_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.listen_state_path.open("w", encoding="utf-8") as file:
+            json.dump(state, file, ensure_ascii=False, indent=2)
+            file.write("\n")
 
     def _payload_to_reply(
         self,
@@ -581,7 +699,7 @@ def main() -> None:
         return
 
     print("WeChat Queue Adapter 已启动：listen。按 Ctrl+C 停止。")
-    adapter.run_forever(client)
+    adapter.run_listen_forever(client)
 
 
 if __name__ == "__main__":

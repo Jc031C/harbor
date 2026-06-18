@@ -30,6 +30,8 @@ v0.3.3-dev 在 wxauto4 兼容准备基础上，增加 `wechat.mode=send_only`。
 
 发送前必须先 `ChatWith` 切换目标联系人，再用 `ChatInfo` 校验 `chat_name`，校验成功后才执行 `SendMsg(content)`。不要使用 `SendMsg(content, contact_name)` 作为默认发送路径。
 
+`wechat.mode=listen` 仍是 v0.3.3-dev 的本地验证路径。该模式只读取目标联系人消息并写入 `data/inbox/`，不处理 `data/outbox/`，不发送微信消息。`allowed_senders` 为空时默认拒绝写入；只有白名单联系人、文本消息、且匹配 `target_contact_name` 的输入才会进入 Harbor 队列。listen 模式会把最近处理过的消息指纹写入 `data/wechat/listen_state.json` 以降低重复入队风险。由于部分微信自动化库拿不到稳定消息 ID，同一联系人连续发送完全相同文本时可能被视为重复消息，真实验证时应使用带唯一内容的测试文本。
+
 ## Windows 本地准备
 
 进入项目目录：
@@ -112,6 +114,14 @@ config/settings.json
 ```
 
 如果需要监听微信消息，后续使用 `mode=listen`，但该模式会初始化真实微信客户端，仍需单独谨慎验证。
+
+listen 只读验证建议：
+
+1. 确认 `wechat.enabled=true`、`wechat.mode=listen`、`target_contact_name` 和 `allowed_senders` 只指向一个测试联系人。
+2. 单独运行 WeChat Bridge，确认没有自动发送行为。
+3. 让测试联系人发送唯一文本消息。
+4. 检查 `data/inbox/` 是否生成 `source=wechat` 的 JSON。
+5. 验证后恢复 `wechat.enabled=false` 或 `wechat.mode=send_only`。
 
 不要把真实联系人、运行数据或临时消息提交到 Git。
 
